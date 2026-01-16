@@ -1,0 +1,729 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Mobile Video Recorder - POC</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 20px;
+            color: #333;
+        }
+        
+        .container {
+            max-width: 600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+        
+        h1 {
+            text-align: center;
+            color: #667eea;
+            margin-bottom: 10px;
+            font-size: 24px;
+        }
+        
+        .subtitle {
+            text-align: center;
+            color: #666;
+            font-size: 14px;
+            margin-bottom: 30px;
+        }
+        
+        .video-container {
+            position: relative;
+            width: 100%;
+            background: #000;
+            border-radius: 15px;
+            overflow: hidden;
+            margin-bottom: 20px;
+            aspect-ratio: 16/9;
+        }
+        
+        video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+        }
+        
+        button {
+            padding: 15px 30px;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-danger {
+            background: #e74c3c;
+            color: white;
+        }
+        
+        .btn-success {
+            background: #27ae60;
+            color: white;
+        }
+        
+        .btn-secondary {
+            background: #95a5a6;
+            color: white;
+        }
+        
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .status {
+            padding: 15px;
+            border-radius: 10px;
+            margin: 15px 0;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        
+        .status.info {
+            background: #e3f2fd;
+            color: #1976d2;
+            border-left: 4px solid #1976d2;
+        }
+        
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+            border-left: 4px solid #2e7d32;
+        }
+        
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+            border-left: 4px solid #c62828;
+        }
+        
+        .status.warning {
+            background: #fff3e0;
+            color: #e65100;
+            border-left: 4px solid #e65100;
+        }
+        
+        .recorded-videos {
+            margin-top: 30px;
+        }
+        
+        .video-item {
+            background: #f5f5f5;
+            padding: 15px;
+            border-radius: 10px;
+            margin-bottom: 15px;
+        }
+        
+        .video-item h3 {
+            font-size: 14px;
+            margin-bottom: 10px;
+            color: #333;
+        }
+        
+        .video-item video {
+            width: 100%;
+            border-radius: 8px;
+            margin-bottom: 10px;
+        }
+        
+        .video-meta {
+            font-size: 12px;
+            color: #666;
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 10px;
+        }
+        
+        .hidden {
+            display: none;
+        }
+        
+        .recording-indicator {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: rgba(231, 76, 60, 0.9);
+            color: white;
+            padding: 8px 15px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+            display: none;
+        }
+        
+        .recording-indicator.active {
+            display: block;
+            animation: pulse 1.5s infinite;
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        .api-url {
+            font-size: 12px;
+            color: #999;
+            margin-top: 20px;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📹 Mobile Video Recorder</h1>
+        <p class="subtitle">Proof of Concept - Local Backup Enabled</p>
+        
+        <div class="video-container">
+            <video id="preview" autoplay playsinline muted></video>
+            <video id="playback" class="hidden" controls></video>
+            <div class="recording-indicator" id="recordingIndicator">● RECORDING</div>
+        </div>
+        
+        <div class="controls">
+            <button id="startBtn" class="btn-primary">Start Camera</button>
+            <button id="recordBtn" class="btn-danger hidden" disabled>Start Recording</button>
+            <button id="stopBtn" class="btn-danger hidden" disabled>Stop Recording</button>
+            <button id="uploadBtn" class="btn-success hidden" disabled>Upload Video</button>
+            <button id="simulateFailureBtn" class="btn-secondary hidden">Simulate Upload Failure</button>
+            <button id="viewLocalBtn" class="btn-secondary">View Local Videos</button>
+        </div>
+        
+        <div id="status" class="status info hidden"></div>
+        
+        <div class="recorded-videos hidden" id="recordedVideos">
+            <h2 style="margin-bottom: 15px; font-size: 18px;">Locally Stored Videos</h2>
+            <div id="videoList"></div>
+        </div>
+        
+        <div class="api-url" id="apiUrl"></div>
+        <div id="httpsWarning" class="status warning hidden" style="margin-top: 20px;">
+            <strong>⚠️ HTTPS Required for Camera Access</strong>
+            <p style="margin-top: 10px; margin-bottom: 5px;">
+                You're accessing via HTTP. Camera access requires HTTPS.
+            </p>
+            <p style="margin: 5px 0; font-size: 13px;">
+                <strong>To fix this:</strong>
+            </p>
+            <ol style="margin: 5px 0 10px 20px; font-size: 13px; line-height: 1.8;">
+                <li>Stop the current server (Ctrl+C)</li>
+                <li>Run: <code style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px;">./run_server_https.sh</code></li>
+                <li>Access at: <code id="httpsUrl" style="background: #f0f0f0; padding: 2px 6px; border-radius: 3px; font-weight: bold; color: #1976d2;">https://YOUR_IP:8443</code></li>
+                <li>Accept the security warning (self-signed cert is safe for testing)</li>
+            </ol>
+        </div>
+        <div id="httpsSuccess" class="status success hidden" style="margin-top: 20px;">
+            <strong>✅ HTTPS Detected!</strong> Camera access should work. If you see a security warning, click "Advanced" → "Proceed to site".
+        </div>
+    </div>
+
+    <script>
+        // Configuration
+        const API_BASE_URL = window.location.origin;
+        const DB_NAME = 'VideoRecorderDB';
+        const DB_VERSION = 1;
+        const STORE_NAME = 'videos';
+        
+        // State
+        let stream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let currentVideoBlob = null;
+        let db = null;
+        
+        // DOM Elements
+        const preview = document.getElementById('preview');
+        const playback = document.getElementById('playback');
+        const startBtn = document.getElementById('startBtn');
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const uploadBtn = document.getElementById('uploadBtn');
+        const simulateFailureBtn = document.getElementById('simulateFailureBtn');
+        const viewLocalBtn = document.getElementById('viewLocalBtn');
+        const status = document.getElementById('status');
+        const recordingIndicator = document.getElementById('recordingIndicator');
+        const recordedVideos = document.getElementById('recordedVideos');
+        const videoList = document.getElementById('videoList');
+        const apiUrl = document.getElementById('apiUrl');
+        const httpsWarning = document.getElementById('httpsWarning');
+        const httpsSuccess = document.getElementById('httpsSuccess');
+        
+        // Show API URL
+        apiUrl.textContent = `API: ${API_BASE_URL}`;
+        
+        // Get current hostname/IP for HTTPS URL
+        const currentHost = window.location.hostname;
+        const httpsUrlElement = document.getElementById('httpsUrl');
+        if (httpsUrlElement) {
+            httpsUrlElement.textContent = `https://${currentHost}:8443`;
+        }
+        
+        // Check if HTTPS is available
+        const isSecure = window.location.protocol === 'https:' || 
+                        window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1';
+        
+        // Show appropriate message
+        if (isSecure) {
+            if (window.location.protocol === 'https:') {
+                httpsSuccess.classList.remove('hidden');
+            }
+            // localhost works without HTTPS, so no warning needed
+        } else {
+            // Not HTTPS and not localhost - show warning with instructions
+            httpsWarning.classList.remove('hidden');
+        }
+        
+        // Initialize IndexedDB
+        async function initDB() {
+            return new Promise((resolve, reject) => {
+                const request = indexedDB.open(DB_NAME, DB_VERSION);
+                
+                request.onerror = () => reject(request.error);
+                request.onsuccess = () => {
+                    db = request.result;
+                    resolve(db);
+                };
+                
+                request.onupgradeneeded = (event) => {
+                    const db = event.target.result;
+                    if (!db.objectStoreNames.contains(STORE_NAME)) {
+                        const objectStore = db.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+                        objectStore.createIndex('timestamp', 'timestamp', { unique: false });
+                    }
+                };
+            });
+        }
+        
+        // Save video to IndexedDB
+        async function saveVideoToLocal(blob, metadata = {}) {
+            if (!db) await initDB();
+            
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readwrite');
+                const store = transaction.objectStore(STORE_NAME);
+                
+                const videoData = {
+                    blob: blob,
+                    timestamp: Date.now(),
+                    size: blob.size,
+                    type: blob.type,
+                    uploaded: false,
+                    ...metadata
+                };
+                
+                const request = store.add(videoData);
+                
+                request.onsuccess = () => {
+                    showStatus(`Video saved locally (ID: ${request.result})`, 'success');
+                    resolve(request.result);
+                };
+                
+                request.onerror = () => {
+                    showStatus('Failed to save video locally', 'error');
+                    reject(request.error);
+                };
+            });
+        }
+        
+        // Get all videos from IndexedDB
+        async function getLocalVideos() {
+            if (!db) await initDB();
+            
+            return new Promise((resolve, reject) => {
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.getAll();
+                
+                request.onsuccess = () => resolve(request.result);
+                request.onerror = () => reject(request.error);
+            });
+        }
+        
+        // Display local videos
+        async function displayLocalVideos() {
+            try {
+                const videos = await getLocalVideos();
+                videoList.innerHTML = '';
+                
+                if (videos.length === 0) {
+                    videoList.innerHTML = '<p style="text-align: center; color: #999;">No videos stored locally yet.</p>';
+                    return;
+                }
+                
+                videos.reverse().forEach(video => {
+                    const videoItem = document.createElement('div');
+                    videoItem.className = 'video-item';
+                    
+                    const url = URL.createObjectURL(video.blob);
+                    const date = new Date(video.timestamp);
+                    const sizeMB = (video.size / (1024 * 1024)).toFixed(2);
+                    
+                    videoItem.innerHTML = `
+                        <h3>Video ${video.id} ${video.uploaded ? '✓ Uploaded' : '⚠ Not Uploaded'}</h3>
+                        <div class="video-meta">
+                            <span>${date.toLocaleString()}</span>
+                            <span>${sizeMB} MB</span>
+                        </div>
+                        <video src="${url}" controls></video>
+                        <button class="btn-primary" onclick="retryUpload(${video.id})" ${video.uploaded ? 'disabled' : ''}>
+                            Retry Upload
+                        </button>
+                    `;
+                    
+                    videoList.appendChild(videoItem);
+                });
+                
+                recordedVideos.classList.remove('hidden');
+            } catch (error) {
+                showStatus(`Error loading local videos: ${error.message}`, 'error');
+            }
+        }
+        
+        // Retry upload
+        async function retryUpload(videoId) {
+            try {
+                if (!db) await initDB();
+                
+                const transaction = db.transaction([STORE_NAME], 'readonly');
+                const store = transaction.objectStore(STORE_NAME);
+                const request = store.get(videoId);
+                
+                request.onsuccess = async () => {
+                    const video = request.result;
+                    await uploadVideo(video.blob, videoId);
+                };
+            } catch (error) {
+                showStatus(`Error retrying upload: ${error.message}`, 'error');
+            }
+        }
+        
+        // Show status message
+        function showStatus(message, type = 'info') {
+            status.textContent = message;
+            status.className = `status ${type}`;
+            status.classList.remove('hidden');
+        }
+        
+        // Check if camera API is available
+        function checkCameraSupport() {
+            // Check for HTTPS/localhost requirement
+            const isSecure = window.location.protocol === 'https:' || 
+                           window.location.hostname === 'localhost' || 
+                           window.location.hostname === '127.0.0.1';
+            
+            if (!isSecure) {
+                return {
+                    supported: false,
+                    error: 'HTTPS_REQUIRED' // Special flag to avoid duplicate messages
+                };
+            }
+            
+            // Check for mediaDevices API
+            if (!navigator.mediaDevices) {
+                return {
+                    supported: false,
+                    error: 'Camera API not supported. Your browser may be too old or the page must be served over HTTPS.'
+                };
+            }
+            
+            // Check for getUserMedia
+            if (!navigator.mediaDevices.getUserMedia) {
+                return {
+                    supported: false,
+                    error: 'getUserMedia not available. Please use a modern browser (Chrome, Firefox, Safari).'
+                };
+            }
+            
+            return { supported: true };
+        }
+        
+        // Start camera
+        async function startCamera() {
+            try {
+                // Check camera support first
+                const support = checkCameraSupport();
+                if (!support.supported) {
+                    // Don't show error if it's just the HTTPS warning (user can see the warning box)
+                    if (support.error !== 'HTTPS_REQUIRED') {
+                        showStatus(support.error, 'error');
+                    }
+                    return;
+                }
+                
+                // Get user media with proper error handling
+                const constraints = {
+                    video: { 
+                        facingMode: 'user',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                preview.srcObject = stream;
+                preview.classList.remove('hidden');
+                playback.classList.add('hidden');
+                
+                startBtn.classList.add('hidden');
+                recordBtn.classList.remove('hidden');
+                recordBtn.disabled = false;
+                
+                showStatus('Camera started. Ready to record.', 'success');
+            } catch (error) {
+                let errorMessage = `Camera error: ${error.message}`;
+                
+                // Provide more helpful error messages
+                if (error.name === 'NotAllowedError' || error.name === 'PermissionDeniedError') {
+                    errorMessage = 'Camera permission denied. Please allow camera access in your browser settings.';
+                } else if (error.name === 'NotFoundError' || error.name === 'DevicesNotFoundError') {
+                    errorMessage = 'No camera found. Please ensure a camera is connected.';
+                } else if (error.name === 'NotReadableError' || error.name === 'TrackStartError') {
+                    errorMessage = 'Camera is already in use by another application.';
+                } else if (error.name === 'OverconstrainedError' || error.name === 'ConstraintNotSatisfiedError') {
+                    errorMessage = 'Camera constraints not supported. Trying with default settings...';
+                    // Try with simpler constraints
+                    try {
+                        stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+                        preview.srcObject = stream;
+                        preview.classList.remove('hidden');
+                        playback.classList.add('hidden');
+                        startBtn.classList.add('hidden');
+                        recordBtn.classList.remove('hidden');
+                        recordBtn.disabled = false;
+                        showStatus('Camera started with default settings.', 'success');
+                        return;
+                    } catch (retryError) {
+                        errorMessage = `Camera error: ${retryError.message}`;
+                    }
+                }
+                
+                showStatus(errorMessage, 'error');
+                console.error('Camera error:', error);
+            }
+        }
+        
+        // Start recording
+        function startRecording() {
+            recordedChunks = [];
+            
+            const options = {
+                mimeType: 'video/webm;codecs=vp8,opus',
+                videoBitsPerSecond: 2500000
+            };
+            
+            // Fallback for iOS
+            if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                options.mimeType = 'video/mp4';
+            }
+            
+            try {
+                mediaRecorder = new MediaRecorder(stream, options);
+                
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: options.mimeType });
+                    currentVideoBlob = blob;
+                    
+                    // Save to local storage immediately
+                    await saveVideoToLocal(blob, { uploaded: false });
+                    
+                    // Show playback
+                    const url = URL.createObjectURL(blob);
+                    playback.src = url;
+                    playback.classList.remove('hidden');
+                    preview.classList.add('hidden');
+                    
+                    recordBtn.classList.add('hidden');
+                    stopBtn.classList.add('hidden');
+                    uploadBtn.classList.remove('hidden');
+                    uploadBtn.disabled = false;
+                    simulateFailureBtn.classList.remove('hidden');
+                    
+                    showStatus(`Recording stopped. Video saved locally (${(blob.size / 1024 / 1024).toFixed(2)} MB)`, 'success');
+                };
+                
+                mediaRecorder.start(1000); // Collect data every second
+                recordingIndicator.classList.add('active');
+                
+                recordBtn.classList.add('hidden');
+                stopBtn.classList.remove('hidden');
+                stopBtn.disabled = false;
+                
+                showStatus('Recording started...', 'info');
+            } catch (error) {
+                showStatus(`Recording error: ${error.message}`, 'error');
+                console.error('Recording error:', error);
+            }
+        }
+        
+        // Stop recording
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                recordingIndicator.classList.remove('active');
+                showStatus('Stopping recording...', 'info');
+            }
+        }
+        
+        // Upload video
+        async function uploadVideo(blob, videoId = null) {
+            if (!blob) {
+                showStatus('No video to upload', 'error');
+                return;
+            }
+            
+            try {
+                showStatus('Uploading video...', 'info');
+                uploadBtn.disabled = true;
+                
+                const formData = new FormData();
+                formData.append('file', blob, `video_${Date.now()}.webm`);
+                
+                const response = await fetch(`${API_BASE_URL}/api/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`Upload failed: ${response.statusText}`);
+                }
+                
+                const result = await response.json();
+                
+                // Update local storage to mark as uploaded
+                if (videoId && db) {
+                    const transaction = db.transaction([STORE_NAME], 'readwrite');
+                    const store = transaction.objectStore(STORE_NAME);
+                    const getRequest = store.get(videoId);
+                    
+                    getRequest.onsuccess = () => {
+                        const video = getRequest.result;
+                        video.uploaded = true;
+                        video.uploadId = result.file_id;
+                        store.put(video);
+                    };
+                }
+                
+                showStatus(`Upload successful! File ID: ${result.file_id}`, 'success');
+                uploadBtn.disabled = false;
+                
+                // Refresh local videos list
+                await displayLocalVideos();
+                
+            } catch (error) {
+                showStatus(`Upload failed: ${error.message}. Video is still saved locally!`, 'warning');
+                uploadBtn.disabled = false;
+                
+                // Refresh to show it's not uploaded
+                if (videoId) {
+                    await displayLocalVideos();
+                }
+            }
+        }
+        
+        // Simulate upload failure
+        async function simulateFailure() {
+            if (!currentVideoBlob) {
+                showStatus('No video to test with', 'error');
+                return;
+            }
+            
+            showStatus('Simulating upload failure...', 'warning');
+            
+            // Try to upload but it will fail (you can modify the API to return error)
+            try {
+                const formData = new FormData();
+                formData.append('file', currentVideoBlob, `video_${Date.now()}.webm`);
+                
+                // Force a network error by using wrong endpoint
+                const response = await fetch(`${API_BASE_URL}/api/upload-fail`, {
+                    method: 'POST',
+                    body: formData
+                });
+            } catch (error) {
+                showStatus(`Upload failed (simulated): ${error.message}. Check local videos - it's still there!`, 'warning');
+                await displayLocalVideos();
+            }
+        }
+        
+        // Event Listeners
+        startBtn.addEventListener('click', startCamera);
+        recordBtn.addEventListener('click', startRecording);
+        stopBtn.addEventListener('click', stopRecording);
+        uploadBtn.addEventListener('click', () => uploadVideo(currentVideoBlob));
+        simulateFailureBtn.addEventListener('click', simulateFailure);
+        viewLocalBtn.addEventListener('click', displayLocalVideos);
+        
+        // Initialize
+        (async () => {
+            try {
+                await initDB();
+                
+                // Check camera support on load
+                const support = checkCameraSupport();
+                if (support.supported) {
+                    showStatus('IndexedDB initialized. Camera ready!', 'success');
+                } else {
+                    // Only show warning if it's not the HTTPS issue (which has its own warning box)
+                    if (support.error !== 'HTTPS_REQUIRED') {
+                        showStatus(`IndexedDB initialized. ${support.error}`, 'warning');
+                    } else {
+                        showStatus('IndexedDB initialized. Please use HTTPS for camera access.', 'info');
+                    }
+                    startBtn.disabled = !support.supported;
+                }
+                
+                await displayLocalVideos();
+            } catch (error) {
+                showStatus(`Initialization error: ${error.message}`, 'error');
+            }
+        })();
+        
+        // Make retryUpload available globally
+        window.retryUpload = retryUpload;
+    </script>
+</body>
+</html>
